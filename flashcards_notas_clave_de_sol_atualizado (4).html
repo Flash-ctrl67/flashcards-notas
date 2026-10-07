@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flashcards de Notas — Claves</title>
+<style>
+  :root{
+    --bg:#f4f7fb; --card:#fff; --text:#172033; --muted:#65708a;
+    --primary:#315efb; --primary2:#2449cf; --good:#168a4a; --bad:#d43b4c;
+    --good-bg:#e6f6ec; --bad-bg:#fdeaec; --border:#dfe5ef; --line:#222;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{
+    margin:0; min-height:100vh; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    background:linear-gradient(135deg,#eef3ff,#f8fafc); color:var(--text);
+    display:flex; justify-content:center; padding:28px 16px;
+  }
+  .app{width:min(760px,100%)}
+  header{text-align:center;margin-bottom:18px}
+  h1{margin:0 0 7px;font-size:clamp(25px,5vw,36px)}
+  header p{margin:0;color:var(--muted)}
+  .stats{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0}
+  .pill{background:var(--card);border:1px solid var(--border);border-radius:999px;padding:8px 15px;font-weight:700}
+
+  /* ---------- Telas de menu (100% da tela) ---------- */
+  .menu-screen{
+    position:fixed; inset:0; z-index:10; width:100vw; height:100vh;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:28px; padding:24px; background:linear-gradient(135deg,#eef3ff,#f8fafc);
+  }
+  .menu-title{font-weight:800;font-size:clamp(30px,6vw,52px);margin:0;text-align:center}
+  .menu-list{display:flex;flex-direction:column;gap:14px;width:min(380px,100%)}
+  .clef-btn{
+    flex:none;width:100%;background:var(--card);color:var(--text);
+    border:2px solid var(--border);padding:20px 16px;border-radius:16px;font-size:20px;
+    box-shadow:0 8px 24px rgba(25,45,90,.07);
+  }
+  .clef-btn:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .pill-btn{
+    flex:none;width:auto;background:var(--primary);color:#fff;
+    border-radius:999px;padding:8px 18px;font-size:16px;
+  }
+  .back-btn{
+    position:absolute;top:20px;left:20px;flex:none;width:auto;
+    background:#edf1f8;color:#26324a;border-radius:999px;padding:10px 18px;font-size:15px;
+  }
+  .back-btn:hover{background:#e2e8f2}
+
+  /* ---------- Árvore: Clave -> Falar / Digitar ---------- */
+  .tree{display:flex;align-items:stretch;width:min(820px,100%)}
+  .node{
+    border:3px solid var(--line);border-radius:14px;background:var(--card);
+    font-weight:800;text-align:center;color:var(--text);
+  }
+  .node-clef{align-self:center;flex:none;width:220px;padding:44px 12px;font-size:26px}
+  .conn{position:relative;flex:none;width:100px}
+  .conn svg{position:absolute;inset:0;width:100%;height:100%}
+  .options{flex:1;display:flex;flex-direction:column}
+  .opt-wrap{flex:1;display:flex;align-items:center;padding:14px 0}
+  .opt{
+    flex:none;width:100%;padding:30px 16px;font-size:28px;cursor:pointer;
+    transition:transform .15s,background .15s,color .15s;
+  }
+  .opt:hover{background:var(--primary);color:#fff;border-color:var(--primary);transform:scale(1.03)}
+  .opt small{display:block;font-size:13px;font-weight:600;margin-top:6px;opacity:.8}
+  .opt:disabled{opacity:.45;cursor:not-allowed;transform:none;background:var(--card);color:var(--text);border-color:var(--line)}
+
+  /* ---------- Animações ---------- */
+  .screen-leave{animation:leave .35s ease forwards}
+  @keyframes leave{to{opacity:0;transform:scale(.96) translateY(-16px)}}
+  .screen-enter{animation:enter .45s ease both}
+  @keyframes enter{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+
+  .screen-enter .node-clef{animation:slideLeft .55s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes slideLeft{from{opacity:0;transform:translateX(90px) scale(.9)}to{opacity:1;transform:none}}
+  .screen-enter .conn svg{animation:reveal .6s ease .35s both}
+  @keyframes reveal{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+  .screen-enter .opt-wrap:nth-child(1) .opt{animation:pop .45s ease .85s both}
+  .screen-enter .opt-wrap:nth-child(2) .opt{animation:pop .45s ease 1s both}
+  @keyframes pop{from{opacity:0;transform:translateX(-30px) scale(.9)}to{opacity:1;transform:none}}
+
+  @media(prefers-reduced-motion:reduce){
+    .screen-enter,.screen-leave,.screen-enter *{animation-duration:.01s !important;animation-delay:0s !important}
+  }
+
+  /* ---------- Jogo ---------- */
+  .card{
+    background:var(--card);border:1px solid var(--border);border-radius:24px;
+    padding:24px;box-shadow:0 15px 40px rgba(25,45,90,.08);
+  }
+  .flash-title{text-align:center;font-weight:800;font-size:18px;margin-bottom:14px}
+  .staff-wrap{
+    width:100%; min-height:300px; display:flex; align-items:center; justify-content:center;
+    background:#fbfcff;border:1px solid #e9edf5;border-radius:18px;overflow:hidden;
+  }
+  .staff-wrap svg{width:min(680px,100%);height:auto;display:block}
+  .answer{margin-top:22px}
+  label{display:block;font-weight:800;margin-bottom:9px}
+  input{
+    width:100%;font-size:20px;padding:14px 16px;border:2px solid var(--border);
+    border-radius:13px;outline:none;text-align:center;transition:background .2s,border-color .2s;
+  }
+  input:focus{border-color:var(--primary);box-shadow:0 0 0 4px rgba(49,94,251,.12)}
+  input.correct,input.correct:disabled{background:var(--good-bg);border-color:var(--good);color:var(--good);font-weight:800;box-shadow:0 0 0 4px rgba(22,138,74,.15)}
+  input.wrong,input.wrong:disabled{background:var(--bad-bg);border-color:var(--bad);color:var(--bad);font-weight:800}
+  .buttons{display:flex;gap:10px;margin-top:12px}
+  button{
+    flex:1;border:0;border-radius:13px;padding:14px 16px;font-size:16px;font-weight:800;
+    cursor:pointer;background:var(--primary);color:#fff;
+  }
+  button:hover{background:var(--primary2)}
+  button:disabled{opacity:.7;cursor:default}
+  .feedback{min-height:28px;text-align:center;font-weight:800;margin:15px 0 0}
+  .good{color:var(--good)} .bad{color:var(--bad)}
+  .hint{text-align:center;color:var(--muted);font-size:13px;margin-top:12px}
+
+  @media(max-width:640px){
+    .tree{flex-direction:column;align-items:stretch;gap:18px}
+    .conn{display:none}
+    .node-clef{width:100%;padding:26px 12px;align-self:stretch}
+    .opt-wrap{padding:0}
+    .options{gap:14px}
+    .opt{padding:22px 16px}
+  }
+  @media(max-width:520px){.card{padding:15px}.staff-wrap{min-height:240px}}
+</style>
+</head>
+<body>
+
+<!-- Menu 1: escolha da clave -->
+<div class="menu-screen" id="menuScreen">
+  <h2 class="menu-title"><strong>Escolha uma clave</strong></h2>
+  <div class="menu-list" id="menu">
+    <button class="clef-btn" data-clef="sol">Clave Sol</button>
+    <button class="clef-btn" data-clef="fa">Clave Fá</button>
+    <button class="clef-btn" data-clef="do">Clave Dó</button>
+  </div>
+</div>
+
+<!-- Menu 2: Falar ou Digitar -->
+<div class="menu-screen" id="modeScreen" hidden>
+  <button class="back-btn" id="backBtn">← Trocar clave</button>
+  <h2 class="menu-title"><strong>Como você quer responder?</strong></h2>
+  <div class="tree">
+    <div class="node node-clef" id="treeClef">Clave Sol</div>
+    <div class="conn" aria-hidden="true">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path d="M0 50 H40 M40 25 V75 M40 25 H100 M40 75 H100"
+              fill="none" stroke="#222" stroke-width="3" stroke-linecap="round"
+              stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      </svg>
+    </div>
+    <div class="options">
+      <div class="opt-wrap"><button class="node opt" id="optFalar" data-mode="falar">🎤 Falar</button></div>
+      <div class="opt-wrap"><button class="node opt" id="optDigitar" data-mode="digitar">⌨️ Digitar</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Jogo -->
+<main class="app" id="gameScreen" hidden>
+  <header>
+    <h1>🎼 Flashcards — Notas na <span id="clefTitle">Clave de Sol</span></h1>
+    <p>Observe a posição da nota no pentagrama e <span id="modeVerb">escreva</span> o nome dela.</p>
+  </header>
+
+  <div class="stats">
+    <div class="pill">Rodada: <span id="round">1</span></div>
+    <div class="pill">Acertos: <span id="score">0</span></div>
+    <div class="pill">Precisão: <span id="accuracy">0%</span></div>
+    <button class="pill-btn" id="menuBtn">☰ Menu</button>
+  </div>
+
+  <section class="card">
+    <div class="flash-title">Qual é o nome desta nota?</div>
+    <div class="staff-wrap">
+      <svg id="staff" viewBox="0 0 700 300" aria-label="Pentagrama em clave de sol"></svg>
+    </div>
+
+    <div class="answer">
+      <label for="answer">Sua resposta</label>
+      <input id="answer" autocomplete="off" placeholder="Ex.: Mi" maxlength="12">
+      <div class="buttons">
+        <button id="check">Verificar</button>
+        <button id="next" hidden>Próxima nota</button>
+      </div>
+      <div id="feedback" class="feedback"></div>
+      <div class="hint" id="hint">Use os nomes: Dó, Ré, Mi, Fá, Sol, Lá ou Si (com ou sem acento).</div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* 13 posições (p = 0..12), da mais grave à mais aguda.
+   y = 240 - 15*p. Linhas do pentagrama: p = 2,4,6,8,10 (y = 210,180,150,120,90).
+   p = 0 e p = 12 usam linha suplementar. */
+const SCALE = ["Dó","Ré","Mi","Fá","Sol","Lá","Si"];
+
+const CLEFS = {
+  sol: { label:"Clave de Sol", start:0 },  // posição 0 = Dó  (1ª linha = Mi)
+  fa:  { label:"Clave de Fá",  start:2 },  // posição 0 = Mi  (1ª linha = Sol)
+  do:  { label:"Clave de Dó",  start:1 }   // posição 0 = Ré  (3ª linha = Dó)
+};
+
+function notesFor(clef){
+  const start = CLEFS[clef].start;
+  return Array.from({length:13}, (_, p) => ({
+    name: SCALE[(start + p) % 7],
+    y: 240 - 15*p,
+    ledgers: (p === 0 || p === 12) ? [240 - 15*p] : []
+  }));
+}
+
+function clefSVG(clef){
+  if(clef === "sol"){
+    return `<text x="92" y="196" font-size="132" font-family="serif" font-weight="400">𝄞</text>`;
+  }
+  if(clef === "fa"){
+    return `
+      <g fill="#222" stroke="#222">
+        <circle cx="158" cy="120" r="9" stroke="none"/>
+        <path d="M152 122 C150 92 208 90 208 134 C208 168 178 192 142 206"
+              fill="none" stroke-width="7" stroke-linecap="round"/>
+        <circle cx="228" cy="107" r="5" stroke="none"/>
+        <circle cx="228" cy="133" r="5" stroke="none"/>
+      </g>`;
+  }
+  return `
+    <g fill="none" stroke="#222" stroke-linecap="round">
+      <line x1="146" y1="90" x2="146" y2="210" stroke-width="10"/>
+      <line x1="162" y1="90" x2="162" y2="210" stroke-width="3"/>
+      <path d="M168 148 C190 148 206 138 206 122 C206 106 190 100 180 108" stroke-width="5"/>
+      <path d="M168 152 C190 152 206 162 206 178 C206 194 190 200 180 192" stroke-width="5"/>
+    </g>`;
+}
+
+let clef = "sol", mode = "digitar", pendingClef = null, notes = notesFor(clef);
+let current = null, lastIndex = -1, round = 1, score = 0, attempts = 0;
+let answered = false, listening = false, busy = false;
+
+const menuScreen = document.getElementById("menuScreen");
+const modeScreen = document.getElementById("modeScreen");
+const gameScreen = document.getElementById("gameScreen");
+const svg = document.getElementById("staff");
+const answer = document.getElementById("answer");
+const feedback = document.getElementById("feedback");
+const check = document.getElementById("check");
+const next = document.getElementById("next");
+const hint = document.getElementById("hint");
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+/* ---------- Transição entre telas ---------- */
+function transition(from, to, done){
+  if(busy) return;
+  busy = true;
+  from.classList.add("screen-leave");
+  setTimeout(() => {
+    from.hidden = true;
+    from.classList.remove("screen-leave", "screen-enter");
+    to.hidden = false;
+    to.classList.remove("screen-enter");
+    void to.offsetWidth;            // reinicia a animação
+    to.classList.add("screen-enter");
+    busy = false;
+    if(done) done();
+  }, 350);
+}
+
+/* ---------- Pentagrama ---------- */
+function drawStaff(note){
+  const staffLines = [90,120,150,180,210]
+    .map(y => `<line x1="135" y1="${y}" x2="620" y2="${y}"/>`).join("");
+  const ledgers = note.ledgers
+    .map(y => `<line x1="385" y1="${y}" x2="455" y2="${y}"/>`).join("");
+  const down = note.y <= 150;
+  const stem = down
+    ? `<line class="note-stem" x1="405" y1="${note.y+4}" x2="405" y2="${note.y+70}" stroke="#222" stroke-width="3"/>`
+    : `<line class="note-stem" x1="435" y1="${note.y-4}" x2="435" y2="${note.y-70}" stroke="#222" stroke-width="3"/>`;
+
+  svg.innerHTML = `
+    <g stroke="#222" stroke-width="2.2">${staffLines}${ledgers}</g>
+    ${clefSVG(clef)}
+    <ellipse class="note-head" cx="420" cy="${note.y}" rx="16" ry="11" fill="#222" transform="rotate(-15 420 ${note.y})"/>
+    ${stem}
+  `;
+}
+
+function colorNote(color){
+  svg.querySelector(".note-head").setAttribute("fill", color);
+  svg.querySelector(".note-stem").setAttribute("stroke", color);
+}
+
+function normalize(s){
+  return s.trim().toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"").replace(/[^a-z]/g,"");
+}
+
+/* ---------- Modo de resposta ---------- */
+function applyMode(){
+  const falar = mode === "falar";
+  answer.readOnly = falar;
+  answer.placeholder = falar ? "Clique no microfone e diga a nota" : "Ex.: Mi";
+  check.textContent = falar ? "🎤 Falar a resposta" : "Verificar";
+  document.getElementById("modeVerb").textContent = falar ? "diga" : "escreva";
+  hint.textContent = falar
+    ? "Diga o nome da nota: Dó, Ré, Mi, Fá, Sol, Lá ou Si."
+    : "Use os nomes: Dó, Ré, Mi, Fá, Sol, Lá ou Si (com ou sem acento).";
+}
+
+function newRound(){
+  let i;
+  do { i = Math.floor(Math.random()*notes.length); } while(i === lastIndex);
+  lastIndex = i;
+  current = notes[i];
+  drawStaff(current);
+
+  answer.value = "";
+  answer.disabled = false;
+  answer.className = "";
+  feedback.textContent = "";
+  feedback.className = "feedback";
+  check.hidden = false;
+  check.disabled = false;
+  applyMode();
+  next.hidden = true;
+  answered = false;
+  document.getElementById("round").textContent = round;
+  if(mode === "digitar") answer.focus();
+}
+
+function updateStats(){
+  document.getElementById("score").textContent = score;
+  document.getElementById("accuracy").textContent =
+    attempts ? Math.round(score/attempts*100) + "%" : "0%";
+}
+
+/* Avalia a resposta (lista de alternativas) e mostra o resultado */
+function evaluate(alts, shown){
+  answered = true;
+  attempts++;
+  answer.disabled = true;
+  check.hidden = true;
+  next.hidden = false;
+  next.focus();
+
+  const ok = alts.some(a => normalize(a) === normalize(current.name));
+  answer.value = ok ? current.name : shown;
+
+  if(ok){
+    score++;
+    answer.className = "correct";
+    colorNote("#168a4a");
+    feedback.textContent = "✓ Acertou! A nota é " + current.name + ".";
+    feedback.className = "feedback good";
+  } else {
+    answer.className = "wrong";
+    colorNote("#d43b4c");
+    feedback.textContent = "✗ A resposta correta é " + current.name + ".";
+    feedback.className = "feedback bad";
+  }
+  updateStats();
+}
+
+function verifyTyped(){
+  if(answered) return;
+  const text = answer.value;
+  if(!normalize(text)){
+    feedback.textContent = "Digite uma resposta.";
+    feedback.className = "feedback bad";
+    return;
+  }
+  evaluate([text], text.trim());
+}
+
+function listen(){
+  if(answered || listening) return;
+  if(!SR){
+    feedback.textContent = "Seu navegador não suporta voz. Use o Chrome ou escolha Digitar.";
+    feedback.className = "feedback bad";
+    return;
+  }
+  const rec = new SR();
+  rec.lang = "pt-BR";
+  rec.maxAlternatives = 5;
+  rec.interimResults = false;
+  let got = false;
+
+  rec.onstart = () => {
+    listening = true;
+    check.disabled = true;
+    check.textContent = "🎙️ Ouvindo…";
+    feedback.textContent = "";
+    feedback.className = "feedback";
+  };
+  rec.onresult = e => {
+    got = true;
+    const res = e.results[0];
+    const alts = Array.from(res).map(r => r.transcript);
+    evaluate(alts, alts[0].trim());
+  };
+  rec.onerror = e => {
+    const msgs = {
+      "no-speech": "Não ouvi nada. Tente de novo.",
+      "not-allowed": "Permita o uso do microfone no navegador.",
+      "service-not-allowed": "Permita o uso do microfone no navegador.",
+      "audio-capture": "Nenhum microfone encontrado."
+    };
+    feedback.textContent = msgs[e.error] || "Não consegui ouvir. Tente de novo.";
+    feedback.className = "feedback bad";
+  };
+  rec.onend = () => {
+    listening = false;
+    if(!answered){
+      check.disabled = false;
+      check.textContent = "🎤 Falar a resposta";
+    }
+  };
+  try { rec.start(); } catch(err){ listening = false; }
+}
+
+function goNext(){
+  if(!answered) return;
+  round++;
+  newRound();
+}
+
+function startGame(clefKey, modeKey){
+  clef = clefKey;
+  mode = modeKey;
+  notes = notesFor(clef);
+  lastIndex = -1;
+  round = 1; score = 0; attempts = 0;
+  document.getElementById("clefTitle").textContent = CLEFS[clef].label;
+  svg.setAttribute("aria-label", "Pentagrama em " + CLEFS[clef].label.toLowerCase());
+  updateStats();
+  newRound();
+}
+
+/* ---------- Eventos ---------- */
+document.getElementById("menu").addEventListener("click", e => {
+  const btn = e.target.closest(".clef-btn");
+  if(!btn) return;
+  pendingClef = btn.dataset.clef;
+  document.getElementById("treeClef").textContent = btn.textContent;
+  transition(menuScreen, modeScreen);
+});
+
+document.querySelectorAll(".opt").forEach(b => {
+  b.addEventListener("click", () => {
+    startGame(pendingClef, b.dataset.mode);
+    transition(modeScreen, gameScreen, () => { if(mode === "digitar") answer.focus(); });
+  });
+});
+
+document.getElementById("backBtn").addEventListener("click", () => transition(modeScreen, menuScreen));
+document.getElementById("menuBtn").addEventListener("click", () => {
+  transition(gameScreen, menuScreen);
+});
+
+check.addEventListener("click", () => mode === "falar" ? listen() : verifyTyped());
+next.addEventListener("click", goNext);
+answer.addEventListener("keydown", e => { if(e.key === "Enter" && mode === "digitar") verifyTyped(); });
+
+if(!SR){
+  const f = document.getElementById("optFalar");
+  f.disabled = true;
+  f.innerHTML = '🎤 Falar<small>indisponível neste navegador</small>';
+}
+
+updateStats();
+</script>
+</body>
+</html>
